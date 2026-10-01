@@ -64,9 +64,15 @@ export default function ActivityPage() {
         <h2>참석자 후기 <Stars value={a.rating} /> <span className="muted">{a.reviews.length}건{a.participantIds.length ? ` / 요청 ${a.participantIds.length}명` : ""}</span></h2>
         <ul className="reviews grid">
           {a.reviews.map((r) => <li key={r.id}><div><Stars value={r.rating} /> <span className="muted small">{r.author}</span></div><p>{r.comment}</p></li>)}
-          {!a.reviews.length && <li className="muted">후기 폼이 발송되었습니다. 응답이 들어오면 여기에 표시됩니다.</li>}
+          {!a.reviews.length && <li className="muted">{a.reviewFormSent ? "후기 폼이 발송되었습니다. 응답이 들어오면 여기에 표시됩니다." : "아직 후기 폼을 보내지 않았습니다."}</li>}
         </ul>
-        {a.participantIds[0] && (
+        {a.mine && !a.reviewFormSent && (
+          <div className="callout ask">
+            <b>참석자에게 후기를 묻는 폼을 작성해 발송할까요?</b>
+            <div className="ask-actions"><button className="btn small" onClick={async () => setData(await api.post(`/activities/${id}/review-form`))}>후기 폼 발송</button></div>
+          </div>
+        )}
+        {a.reviewFormSent && a.participantIds[0] && (
           <p className="muted small"><Link to={`/review/${a.id}?as=${a.participantIds[1] || a.participantIds[0]}`} target="_blank">참석자 화면에서 후기 폼 작성해 보기 ↗</Link></p>
         )}
       </section>

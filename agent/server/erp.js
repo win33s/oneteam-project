@@ -3,7 +3,6 @@
 import express from "express";
 import { getDb, save } from "./db.js";
 import { esc, won, today, pad, parseYmd } from "./util.js";
-import { MY_DEPT, ME } from "./seed.js";
 
 export const erpRouter = express.Router();
 const PAGE_SIZE = 20;
@@ -43,7 +42,7 @@ const layout = (title, body) => `<!doctype html>
 </style></head>
 <body>
 <header><b>G-ERP</b><span>경비관리 · 데모용 가상 시스템</span></header>
-<nav><a href="/erp/expenses">경비 전표 조회</a><a href="/erp/new">신규 경비 등록</a><a href="/">조직문화 에이전트로 돌아가기</a></nav>
+<nav><a href="/erp/expenses">경비 전표 조회</a><a href="/erp/new">신규 경비 등록</a><a href="/">HBM으로 돌아가기</a></nav>
 <main>${body}</main></body></html>`;
 
 erpRouter.get("/", (_req, res) => res.redirect("/erp/expenses"));
@@ -58,7 +57,7 @@ erpRouter.get("/expenses", (req, res) => {
   const q = dept ? `&dept=${encodeURIComponent(dept)}` : "";
   const body = `
   <h1>경비 전표 조회</h1>
-  <div class="notice">이 화면은 데모용 가상 ERP입니다. 조직문화 에이전트가 이 목록과 상세 화면을 주기적으로 읽어 갑니다.</div>
+  <div class="notice">이 화면은 데모용 가상 ERP입니다. HBM 에이전트가 이 목록과 상세 화면을 주기적으로 읽어 갑니다.</div>
   <form class="filter" method="get">부서
     <select name="dept"><option value="">전체</option>${db.departments
       .map((d) => `<option ${d.name === dept ? "selected" : ""}>${esc(d.name)}</option>`)
@@ -117,8 +116,9 @@ erpRouter.get("/new", (req, res) => {
   const db = getDb();
   const plan = db.plans.find((p) => p.id === req.query.planId);
   const venue = plan && db.venues.find((v) => v.id === plan.venueId);
-  const me = db.employees.find((e) => e.id === ME);
-  const dept = db.departments.find((d) => d.id === MY_DEPT);
+  // 기획에서 넘어온 경우 그 기획의 부서·담당자로, 아니면 ?emp= 로 받은 로그인 사용자로 채운다
+  const me = db.employees.find((e) => e.id === (plan?.ownerId || req.query.emp)) || db.employees[0];
+  const dept = db.departments.find((d) => d.id === (plan?.deptId || me.deptId));
   const headcount = plan ? plan.memberIds.length : 10;
   const pre = {
     useDate: plan?.date || today(),
@@ -132,7 +132,7 @@ erpRouter.get("/new", (req, res) => {
   const inp = (name, value, extra = "") => `<input name="${name}" value="${esc(value)}" size="50" ${extra}>`;
   const body = `
   <h1>신규 경비 등록</h1>
-  <div class="notice">${plan ? "에이전트에서 확정한 계획 내용으로 미리 채웠습니다. " : ""}등록하면 조직문화 에이전트가 이 전표를 읽어 부서 활동 기록에 자동으로 올립니다.</div>
+  <div class="notice">${plan ? "에이전트에서 확정한 계획 내용으로 미리 채웠습니다. " : ""}등록하면 HBM 에이전트가 이 전표를 읽어 부서 활동 기록에 자동으로 올립니다.</div>
   <form method="post" action="/erp/expenses">
   <table class="detail">
     <tr><th>부서</th><td><select name="dept">${db.departments

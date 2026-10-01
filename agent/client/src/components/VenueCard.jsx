@@ -26,6 +26,7 @@ export function VenueCard({ v }) {
           <Stars value={v.myRating ?? v.otherRating ?? v.rating} />
           <span>1인 {won(v.avgPerHead)}</span>
         </div>
+        {v.reason && <p className="card-reason">{v.reason}</p>}
       </div>
     </Link>
   );

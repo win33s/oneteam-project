@@ -1,9 +1,18 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 
+const SESSION_KEY = "hbm.session";
+export const getSession = () => { try { return localStorage.getItem(SESSION_KEY); } catch { return null; } };
+export const setSession = (empId) => { try { localStorage.setItem(SESSION_KEY, empId); } catch { /* 저장소를 못 쓰면 새로고침 때 다시 로그인 */ } };
+export const clearSession = () => { try { localStorage.removeItem(SESSION_KEY); } catch { /* 무시 */ } };
+
 async function request(method, url, body) {
+  const headers = {};
+  if (body) headers["content-type"] = "application/json";
+  const empId = getSession();
+  if (empId) headers["x-emp-id"] = empId;
   const res = await fetch(`/api${url}`, {
     method,
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));

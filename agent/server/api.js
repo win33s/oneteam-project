@@ -1,11 +1,12 @@
 import express from "express";
 import { getDb, save, log } from "./db.js";
-import { MY_DEPT, ME } from "./seed.js";
+import { ME } from "./seed.js";
 import { uid, today, ymd, addDays, dateLabel, won } from "./util.js";
 import { recommendDates } from "./agent/scheduler.js";
 import { homeRows, venueDetail, recommendVenues, allVenueCards, bookingUrl, CATEGORY_LABEL } from "./agent/recommender.js";
 import { sendMail } from "./agent/mailer.js";
 import { crawlErp } from "./agent/crawler.js";
+import { sendReviewForm } from "./agent/records.js";
 import { llmEnabled, parseRequestWithLlm, summarizeRecommendations } from "./agent/llm.js";
 
 export function apiRouter(baseUrl) {
@@ -14,11 +15,51 @@ export function apiRouter(baseUrl) {
   const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
   const notFound = (res, what) => res.status(404).json({ error: `${what}을(를) 찾을 수 없습니다` });
 
-  api.get("/bootstrap", (_req, res) => {
+  // 로그인한 사람은 화면이 보내는 x-emp-id 헤더로 구분한다 (데모용. 실서비스에서는 사내 SSO 세션으로 교체)
+  const who = (req) => {
     const db = getDb();
+    return db.employees.find((e) => e.id === req.get("x-emp-id")) || db.employees.find((e) => e.id === ME);
+  };
+
+  // --- 로그인 (데모) ---
+  // 1단계: 사번·이름·비밀번호 형식만 확인한다. 비밀번호는 저장하지 않는다.
+  api.post("/login", (req, res) => {
+    const { empNo, name, password } = req.body;
+    if (!/^\d{4,10}$/.test(String(empNo || ""))) return res.status(400).json({ error: "사번은 숫자 4~10자리로 입력해 주세요" });
+    if (!String(name || "").trim()) return res.status(400).json({ error: "이름을 입력해 주세요" });
+    if (String(password || "").length < 4) return res.status(400).json({ error: "비밀번호는 4자 이상 입력해 주세요" });
+    const db = getDb();
+    res.json({ ok: true, departments: db.departments, known: db.employees.find((e) => e.empNo === String(empNo))?.deptId || null });
+  });
+
+  // 2단계: 소속 그룹·팀을 고르면 그 팀의 구성원으로 들어간다. 같은 이름이 있으면 그 사람으로, 없으면 새로 등록한다.
+  api.post("/session", (req, res) => {
+    const db = getDb();
+    const empNo = String(req.body.empNo || "");
+    const name = String(req.body.name || "").trim();
+    const dept = db.departments.find((d) => d.id === req.body.deptId);
+    if (!empNo || !name || !dept) return res.status(400).json({ error: "사번, 이름, 소속 팀이 필요합니다" });
+    let emp = db.employees.find((e) => e.empNo === empNo) || db.employees.find((e) => e.deptId === dept.id && e.name === name && !e.empNo);
+    if (emp) {
+      emp.empNo = empNo;
+      emp.name = name;
+      emp.deptId = dept.id;
+      emp.isPlanner = true;
+    } else {
+      emp = { id: `u${empNo}`, empNo, name, title: "사원", deptId: dept.id, email: `user${empNo}@demo-corp.example`, isPlanner: true, prefs: { diet: [], alcohol: "조금", likes: [] } };
+      db.employees.push(emp);
+    }
+    log("로그인", `${dept.name} ${name} 님 접속`);
+    save();
+    res.json({ empId: emp.id });
+  });
+
+  api.get("/bootstrap", (req, res) => {
+    const db = getDb();
+    const me = who(req);
     res.json({
-      me: db.employees.find((e) => e.id === ME),
-      dept: db.departments.find((d) => d.id === MY_DEPT),
+      me,
+      dept: db.departments.find((d) => d.id === me.deptId),
       departments: db.departments,
       employees: db.employees,
       categories: CATEGORY_LABEL,
@@ -27,10 +68,10 @@ export function apiRouter(baseUrl) {
     });
   });
 
-  api.get("/home", (_req, res) => res.json(homeRows(getDb(), MY_DEPT)));
-  api.get("/venues", (_req, res) => res.json(allVenueCards(getDb(), MY_DEPT)));
+  api.get("/home", (req, res) => res.json(homeRows(getDb(), who(req).deptId)));
+  api.get("/venues", (req, res) => res.json(allVenueCards(getDb(), who(req).deptId)));
   api.get("/venues/:id", (req, res) => {
-    const v = venueDetail(getDb(), req.params.id, MY_DEPT);
+    const v = venueDetail(getDb(), req.params.id, who(req).deptId);
     return v ? res.json(v) : notFound(res, "장소");
   });
 
@@ -60,16 +101,20 @@ export function apiRouter(baseUrl) {
     };
   };
 
-  api.get("/plans", (_req, res) => {
+  api.get("/plans", (req, res) => {
     const db = getDb();
-    res.json(db.plans.map((p) => expandPlan(db, p)).reverse());
+    const deptId = who(req).deptId;
+    res.json(db.plans.filter((p) => p.deptId === deptId).map((p) => expandPlan(db, p)).reverse());
   });
 
   api.post("/plans", (req, res) => {
     const db = getDb();
+    const me = who(req);
     const b = req.body;
     const plan = {
       id: uid("p"),
+      deptId: me.deptId,
+      ownerId: me.id,
       title: b.title || "조직문화활동",
       category: b.category || "any",
       budgetPerHead: Number(b.budgetPerHead) || 0,
@@ -82,11 +127,15 @@ export function apiRouter(baseUrl) {
       date: null,
       venueId: null,
       pollId: null,
+      reviewForm: null,
       createdAt: new Date().toISOString(),
     };
     log("캘린더", `부서원 ${plan.memberIds.length}명의 일정과 부서 과제 일정을 ${plan.from} ~ ${plan.to} 범위로 조회`);
-    plan.dateCandidates = recommendDates(db, { ...plan, deptId: MY_DEPT });
-    log("날짜", `후보 ${plan.dateCandidates.length}개 산출. 1순위 ${plan.dateCandidates[0]?.label ?? "없음"} (${plan.dateCandidates[0]?.available ?? 0}/${plan.memberIds.length}명 가능)`);
+    const { candidates, excluded } = recommendDates(db, plan);
+    plan.dateCandidates = candidates;
+    plan.excludedPeriods = excluded;
+    for (const x of excluded) log("날짜", `중요 과제 일정 "${x.title}" (${x.label})은 후보에서 자동 제외`);
+    log("날짜", `후보 ${candidates.length}개 산출. 1순위 ${candidates[0]?.label ?? "없음"} (${candidates[0]?.available ?? 0}/${plan.memberIds.length}명 가능)`);
     db.plans.push(plan);
     save();
     res.json(expandPlan(db, plan));
@@ -141,21 +190,23 @@ export function apiRouter(baseUrl) {
     const db = getDb();
     const plan = db.plans.find((p) => p.id === req.params.id);
     if (!plan) return notFound(res, "기획");
-    const recs = recommendVenues(db, { ...plan, myDeptId: MY_DEPT });
+    const result = recommendVenues(db, { ...plan, myDeptId: plan.deptId });
+    const recs = result.recommendations;
     if (!plan.venueAdvice) {
-      log("추천", `타부서 경비 기록·후기·방문 횟수·개인 선호를 종합해 ${recs.length}곳 추천. 1순위 ${recs[0]?.name}`);
+      log("날씨", `${dateLabel(plan.date)} 예보 확인: ${result.weather.label}`);
+      log("추천", `이맘때 경비 기록·후기·단체 사진·날씨·개인 선호를 종합해 ${recs.length}곳 추천. 1순위 ${recs[0]?.name ?? "없음"}. 새로운 제안 ${result.fresh.length}곳`);
       const members = db.employees.filter((e) => plan.memberIds.includes(e.id));
       const text = await summarizeRecommendations({
         members,
         date: plan.date,
         candidates: recs.slice(0, 5).map((r) => ({ name: r.name, type: r.sub, score: r.score, reasons: r.reasons.map((x) => x.text), visitsByOurDept: r.visitsMine, avgPerHead: r.avgPerHead })),
       });
-      plan.venueAdvice = { text: text || ruleAdvice(recs), engine: text ? "claude" : "rules" };
+      plan.venueAdvice = { text: text || ruleAdvice(recs, result.fresh), engine: text ? "claude" : "rules" };
       save();
     }
     // 가고 싶다고 미리 고른 곳이 이미 여러 번 간 곳이면 대안을 알려 준다
-    const preferred = plan.preferVenueId && allVenueCards(db, MY_DEPT).find((v) => v.id === plan.preferVenueId);
-    res.json({ recommendations: recs, advice: plan.venueAdvice, preferred: preferred || null });
+    const preferred = plan.preferVenueId && allVenueCards(db, plan.deptId).find((v) => v.id === plan.preferVenueId);
+    res.json({ ...result, advice: plan.venueAdvice, preferred: preferred || null });
   }));
 
   api.post("/plans/:id/confirm", (req, res) => {
@@ -176,6 +227,18 @@ export function apiRouter(baseUrl) {
     }
     log("메일", `안내 메일 ${plan.memberIds.length}통 발송: ${dateLabel(plan.date)} ${venue.name}`);
     log("예약", `네이버 지도 예약·검색 페이지 준비: ${venue.name}`);
+    log("후기", "후기 폼을 작성해 발송할지 담당자에게 확인 요청");
+    save();
+    res.json(expandPlan(db, plan));
+  });
+
+  // 날짜·장소 확정 뒤 담당자에게 묻는 질문의 답. send=true면 폼을 만들어 두고, 활동 기록이 올라오면 참석자에게 발송한다.
+  api.post("/plans/:id/review-form", (req, res) => {
+    const db = getDb();
+    const plan = db.plans.find((p) => p.id === req.params.id);
+    if (!plan) return notFound(res, "기획");
+    plan.reviewForm = req.body.send ? "scheduled" : "skip";
+    log("후기", req.body.send ? `후기 폼 작성 완료. 활동 기록이 올라오면 참석자 ${plan.memberIds.length}명에게 발송 예정` : "담당자 선택에 따라 후기 폼은 보내지 않음");
     save();
     res.json(expandPlan(db, plan));
   });
@@ -230,12 +293,12 @@ export function apiRouter(baseUrl) {
   });
 
   // --- 활동 기록 ---
-  const expandActivity = (db, a) => {
+  const expandActivity = (db, a, deptId) => {
     const v = db.venues.find((x) => x.id === a.venueId);
     const ratings = a.reviews.map((r) => r.rating);
     return {
       ...a,
-      mine: a.deptId === MY_DEPT,
+      mine: a.deptId === deptId,
       venueName: v?.name,
       emoji: v?.emoji,
       hue: v?.hue,
@@ -248,13 +311,14 @@ export function apiRouter(baseUrl) {
 
   api.get("/activities", (req, res) => {
     const db = getDb();
+    const mine = who(req).deptId;
     const { scope, category, q, dept } = req.query;
     let list = db.activities;
-    if (scope === "mine") list = list.filter((a) => a.deptId === MY_DEPT);
-    if (scope === "others") list = list.filter((a) => a.deptId !== MY_DEPT);
+    if (scope === "mine") list = list.filter((a) => a.deptId === mine);
+    if (scope === "others") list = list.filter((a) => a.deptId !== mine);
     if (dept) list = list.filter((a) => a.deptId === dept);
     if (category) list = list.filter((a) => a.category === category);
-    let out = list.map((a) => expandActivity(db, a));
+    let out = list.map((a) => expandActivity(db, a, mine));
     if (q) out = out.filter((a) => `${a.venueName} ${a.title} ${a.sub} ${a.deptName}`.includes(q));
     out.sort((a, b) => (a.date < b.date ? 1 : -1));
     res.json(out);
@@ -263,7 +327,7 @@ export function apiRouter(baseUrl) {
   api.get("/activities/:id", (req, res) => {
     const db = getDb();
     const a = db.activities.find((x) => x.id === req.params.id);
-    return a ? res.json(expandActivity(db, a)) : notFound(res, "활동 기록");
+    return a ? res.json(expandActivity(db, a, who(req).deptId)) : notFound(res, "활동 기록");
   });
 
   api.post("/activities/:id/comments", (req, res) => {
@@ -272,9 +336,20 @@ export function apiRouter(baseUrl) {
     if (!a) return notFound(res, "활동 기록");
     const text = String(req.body.text || "").trim();
     if (!text) return res.status(400).json({ error: "코멘트 내용을 입력해 주세요" });
-    a.comments.push({ id: uid("c"), author: db.employees.find((e) => e.id === ME).name, text, createdAt: today() });
+    const me = who(req);
+    a.comments.push({ id: uid("c"), author: me.name, text, createdAt: today() });
     save();
-    res.json(expandActivity(db, a));
+    res.json(expandActivity(db, a, me.deptId));
+  });
+
+  api.post("/activities/:id/review-form", (req, res) => {
+    const db = getDb();
+    const a = db.activities.find((x) => x.id === req.params.id);
+    if (!a) return notFound(res, "활동 기록");
+    if (!a.participantIds.length) a.participantIds = db.employees.filter((e) => e.deptId === a.deptId).map((e) => e.id);
+    sendReviewForm(db, a);
+    save();
+    res.json(expandActivity(db, a, who(req).deptId));
   });
 
   api.post("/activities/:id/reviews", (req, res) => {
@@ -288,7 +363,7 @@ export function apiRouter(baseUrl) {
     a.reviews.push({ id: uid("r"), empId: emp.id, author: emp.name, rating, comment: String(req.body.comment || ""), createdAt: today() });
     log("후기", `${emp.name} 님 후기 수집 (${rating}점) → 다음 추천에 반영`);
     save();
-    res.json(expandActivity(db, a));
+    res.json(expandActivity(db, a, who(req).deptId));
   });
 
   // --- 메일함 · 로그 · 프로필 ---
@@ -303,17 +378,18 @@ export function apiRouter(baseUrl) {
     res.json({ ok: true });
   });
   api.get("/logs", (_req, res) => res.json(getDb().logs.slice(-60).reverse()));
-  api.get("/status", (_req, res) => {
+  api.get("/status", (req, res) => {
     const db = getDb();
-    res.json({ unread: db.mails.filter((m) => m.to === ME && !m.read).length, activityCount: db.activities.length });
+    const me = who(req);
+    res.json({ unread: db.mails.filter((m) => m.to === me.id && !m.read).length, activityCount: db.activities.length });
   });
 
   api.put("/employees/:id/prefs", (req, res) => {
     const db = getDb();
     const emp = db.employees.find((e) => e.id === req.params.id);
     if (!emp) return notFound(res, "구성원");
-    const { diet, alcohol, likes, note } = req.body;
-    emp.prefs = { diet: diet || [], alcohol: alcohol || "조금", likes: likes || [], note: note || "" };
+    const { diet, alcohol, likes } = req.body;
+    emp.prefs = { diet: diet || [], alcohol: alcohol || "조금", likes: likes || [] };
     save();
     res.json(emp);
   });
@@ -345,14 +421,13 @@ function parseByRules(text) {
   };
 }
 
-function ruleAdvice(recs) {
-  if (!recs.length) return "조건에 맞는 곳을 찾지 못했습니다. 유형이나 예산 조건을 넓혀 보세요.";
+function ruleAdvice(recs, fresh) {
+  if (!recs.length) return fresh.length ? `이 조건으로 다녀온 기록은 없습니다. 대신 완전히 새로운 ${fresh[0].name}을(를) 살펴보세요.` : "조건에 맞는 곳을 찾지 못했습니다. 유형이나 예산 조건을 넓혀 보세요.";
   const [top] = recs;
   const good = top.reasons.filter((r) => r.tone === "good").slice(0, 2).map((r) => r.text).join(", ");
   const warn = top.reasons.find((r) => r.tone === "warn");
-  const fresh = recs.find((r) => r.visitsMine === 0 && r.id !== top.id);
   let text = `가장 권하는 곳은 ${top.name}입니다.${good ? ` 근거: ${good}.` : ""}`;
   if (warn) text += ` 확인할 점: ${warn.text}.`;
-  if (top.visitsMine > 0 && fresh) text += ` 이미 가 본 곳이 부담스럽다면 처음 가는 ${fresh.name}도 좋은 대안입니다.`;
+  if (fresh[0]) text += ` 늘 가던 곳이 아닌 새로운 것을 원하면 아직 아무 부서도 안 가 본 ${fresh[0].name}도 있습니다.`;
   return text;
 }

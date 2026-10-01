@@ -1,4 +1,5 @@
 // 날짜 추천: 선택한 부서원의 캘린더와 부서 과제 일정을 보고 후보일에 점수를 매긴다.
+// 중요한 과제 일정과 겹치는 기간은 후보에서 아예 뺀다.
 import { ymd, parseYmd, addDays, diffDays, dateLabel } from "../util.js";
 
 // 데모용 공휴일 (실서비스에서는 사내 캘린더의 휴일 정보를 사용)
@@ -10,12 +11,14 @@ export function recommendDates(db, { memberIds, from, to, slot = "dinner", deptI
   const members = db.employees.filter((e) => memberIds.includes(e.id));
   const events = db.calendar.filter((ev) => memberIds.includes(ev.empId));
   const milestones = db.milestones.filter((m) => m.deptId === deptId);
+  const important = milestones.filter((m) => m.important);
   const out = [];
 
   for (let d = parseYmd(from); ymd(d) <= to; d = addDays(d, 1)) {
     const date = ymd(d);
     const dow = d.getDay();
     if (dow === 0 || dow === 6 || HOLIDAYS.has(date)) continue;
+    if (important.some((m) => m.from <= date && date <= m.to)) continue;
 
     const conflicts = [];
     for (const m of members) {
@@ -32,11 +35,11 @@ export function recommendDates(db, { memberIds, from, to, slot = "dinner", deptI
       notes.push({ tone: "warn", text: "팀장 일정과 겹침" });
     }
     for (const ms of milestones) {
-      const gap = diffDays(ms.date, date);
-      if (gap === 0) { score -= 40; notes.push({ tone: "warn", text: `과제 일정 당일: ${ms.title}` }); }
-      else if (gap === 1) { score -= 22; notes.push({ tone: "warn", text: `다음 날 과제 일정: ${ms.title}` }); }
-      else if (gap === 2) { score -= 8; notes.push({ tone: "info", text: `이틀 뒤 과제 일정: ${ms.title}` }); }
-      else if (gap === -1) { score += 5; notes.push({ tone: "good", text: `${ms.title} 끝난 다음 날` }); }
+      if (ms.from <= date && date <= ms.to) { score -= 25; notes.push({ tone: "warn", text: `과제 일정과 겹침: ${ms.title}` }); continue; }
+      const before = diffDays(ms.from, date);
+      const after = diffDays(date, ms.to);
+      if (before === 1) { score -= ms.important ? 18 : 8; notes.push({ tone: "warn", text: `다음 날 과제 일정: ${ms.title}` }); }
+      else if (after === 1) { score += 5; notes.push({ tone: "good", text: `${ms.title} 끝난 다음 날` }); }
     }
     const bonus = WEEKDAY_BONUS[slot]?.[dow] ?? 0;
     score += bonus;
@@ -54,5 +57,9 @@ export function recommendDates(db, { memberIds, from, to, slot = "dinner", deptI
     });
   }
   out.sort((a, b) => b.score - a.score || (a.date < b.date ? -1 : 1));
-  return out.slice(0, 6);
+
+  const excluded = important
+    .filter((m) => m.to >= from && m.from <= to)
+    .map((m) => ({ title: m.title, from: m.from, to: m.to, label: m.from === m.to ? dateLabel(m.from) : `${dateLabel(m.from)} ~ ${dateLabel(m.to)}` }));
+  return { candidates: out.slice(0, 6), excluded };
 }

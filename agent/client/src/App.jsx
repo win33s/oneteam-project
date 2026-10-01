@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from "react";
-import { NavLink, Route, Routes, Link } from "react-router-dom";
-import { useApi } from "./api.js";
+import { NavLink, Route, Routes, Link, useNavigate } from "react-router-dom";
+import { useApi, getSession, clearSession } from "./api.js";
+import Login from "./pages/Login.jsx";
 import AgentLog from "./components/AgentLog.jsx";
 import Home from "./pages/Home.jsx";
 import VenuePage from "./pages/VenuePage.jsx";
@@ -17,6 +18,13 @@ const BootContext = createContext(null);
 export const useBoot = () => useContext(BootContext);
 
 export default function App() {
+  const [signedIn, setSignedIn] = useState(() => Boolean(getSession()));
+  if (!signedIn) return <Login onDone={() => setSignedIn(true)} />;
+  return <Shell onLogout={() => { clearSession(); setSignedIn(false); }} />;
+}
+
+function Shell({ onLogout }) {
+  const navigate = useNavigate();
   const { data: boot, error, reload } = useApi("/bootstrap");
   const { data: status } = useApi("/status", { intervalMs: 4000 });
   const [logOpen, setLogOpen] = useState(false);
@@ -28,8 +36,8 @@ export default function App() {
     <BootContext.Provider value={{ ...boot, reloadBoot: reload }}>
       <header className="topbar">
         <Link to="/" className="brand">
-          <span className="brand-mark">한자리</span>
-          <span className="brand-sub">조직문화활동 기획 에이전트</span>
+          <span className="brand-mark">HBM</span>
+          <span className="brand-sub">Happy Bonding Memory</span>
         </Link>
         <nav>
           <NavLink to="/" end>추천</NavLink>
@@ -39,6 +47,7 @@ export default function App() {
           <NavLink to="/mailbox">
             메일함{status?.unread ? <em className="count">{status.unread}</em> : null}
           </NavLink>
+          <NavLink to="/profile">부서원 프로필</NavLink>
           <a href="/erp/expenses" target="_blank" rel="noreferrer">ERP ↗</a>
         </nav>
         <div className="topbar-right">
@@ -67,6 +76,7 @@ export default function App() {
         </Routes>
       </main>
 
+      <button className="logout" onClick={() => { navigate("/"); onLogout(); }}>← 로그아웃</button>
       <AgentLog open={logOpen} onClose={() => setLogOpen(false)} />
     </BootContext.Provider>
   );

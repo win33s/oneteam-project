@@ -46,12 +46,12 @@ const VENUES = [
   { id: "v5", name: "양꼬치 삼형제", category: "restaurant", sub: "양꼬치", area: "이천 부발읍", price: 30000, base: 3.8, seasons: ALL, emoji: "🍢", hue: 25, f: { alcohol: true, spicy: true }, capacity: 28 },
   { id: "v6", name: "솥뚜껑 닭볶음탕", category: "restaurant", sub: "한식", area: "이천 대월면", price: 25000, base: 4.1, seasons: ["winter", "autumn"], emoji: "🍲", hue: 8, f: { spicy: true, room: true }, capacity: 36 },
   { id: "v7", name: "온기 샤브샤브", category: "restaurant", sub: "샤브샤브", area: "이천 증포동", price: 28000, base: 4.4, seasons: ["winter", "autumn"], emoji: "🥬", hue: 95, f: { veg: true, room: true }, capacity: 32 },
-  { id: "v8", name: "루프탑 비어가든", category: "restaurant", sub: "맥주·야외석", area: "이천 중리동", price: 27000, base: 4.2, seasons: ["summer", "spring"], emoji: "🍺", hue: 45, f: { alcohol: true }, capacity: 50 },
+  { id: "v8", name: "루프탑 비어가든", category: "restaurant", sub: "맥주·야외석", area: "이천 중리동", price: 27000, base: 4.2, seasons: ["summer", "spring"], emoji: "🍺", hue: 45, f: { alcohol: true }, capacity: 50, outdoor: true },
   { id: "v9", name: "스트라이크 볼링센터", category: "activity", sub: "볼링", area: "이천 증포동", price: 15000, base: 4.4, seasons: ALL, emoji: "🎳", hue: 265, f: {}, capacity: 40 },
   { id: "v10", name: "미궁 방탈출 카페", category: "activity", sub: "방탈출", area: "이천 중리동", price: 22000, base: 4.6, seasons: ALL, emoji: "🗝️", hue: 285, f: {}, capacity: 18 },
   { id: "v11", name: "클라임온 실내 클라이밍", category: "activity", sub: "클라이밍", area: "이천 마장면", price: 20000, base: 4.0, seasons: ALL, emoji: "🧗", hue: 170, f: {}, capacity: 16 },
-  { id: "v12", name: "설봉 둘레길 산책과 도시락", category: "activity", sub: "야외 산책", area: "이천 설봉공원", price: 12000, base: 4.5, seasons: ["spring", "autumn"], emoji: "🍁", hue: 28, f: { veg: true }, capacity: 60 },
-  { id: "v13", name: "레이크 카약 체험", category: "activity", sub: "수상레저", area: "여주 남한강", price: 30000, base: 4.3, seasons: ["summer"], emoji: "🛶", hue: 190, f: {}, capacity: 20 },
+  { id: "v12", name: "설봉 둘레길 산책과 도시락", category: "activity", sub: "야외 산책", area: "이천 설봉공원", price: 12000, base: 4.5, seasons: ["spring", "autumn"], emoji: "🍁", hue: 28, f: { veg: true }, capacity: 60, outdoor: true },
+  { id: "v13", name: "레이크 카약 체험", category: "activity", sub: "수상레저", area: "여주 남한강", price: 30000, base: 4.3, seasons: ["summer"], emoji: "🛶", hue: 190, f: {}, capacity: 20, outdoor: true },
   { id: "v14", name: "홈런존 스크린야구", category: "activity", sub: "스크린야구", area: "이천 부발읍", price: 18000, base: 4.1, seasons: ALL, emoji: "⚾", hue: 215, f: { alcohol: true }, capacity: 24 },
   { id: "v15", name: "아이스링크 컬링 체험", category: "activity", sub: "컬링", area: "용인 기흥", price: 25000, base: 4.7, seasons: ["winter"], emoji: "🥌", hue: 205, f: {}, capacity: 24 },
   { id: "v16", name: "주사위 보드게임 라운지", category: "activity", sub: "보드게임", area: "이천 증포동", price: 12000, base: 4.2, seasons: ALL, emoji: "🎲", hue: 320, f: {}, capacity: 30 },
@@ -60,10 +60,17 @@ const VENUES = [
   { id: "v19", name: "시네마 단체관람 대관", category: "culture", sub: "영화 관람", area: "이천 터미널 인근", price: 15000, base: 4.0, seasons: ALL, emoji: "🎬", hue: 240, f: {}, capacity: 80 },
   { id: "v20", name: "MBTI 팀 워크숍 (외부 강사)", category: "culture", sub: "성향 검사·워크숍", area: "사내 대회의실", price: 20000, base: 4.2, seasons: ALL, emoji: "🧩", hue: 150, f: {}, capacity: 40 },
   { id: "v21", name: "한끼 쿠킹 스튜디오", category: "culture", sub: "쿠킹 클래스", area: "이천 증포동", price: 40000, base: 4.5, seasons: ALL, emoji: "👩‍🍳", hue: 18, f: { veg: true }, capacity: 16 },
-  { id: "v22", name: "숲속 스테이 워크숍", category: "stay", sub: "펜션·워크숍", area: "양평 용문", price: 90000, base: 4.4, seasons: ["autumn", "spring"], emoji: "🌲", hue: 130, f: { room: true }, capacity: 25 },
+  { id: "v22", name: "숲속 스테이 워크숍", category: "stay", sub: "펜션·워크숍", area: "양평 용문", price: 90000, base: 4.4, seasons: ["autumn", "spring"], emoji: "🌲", hue: 130, f: { room: true }, capacity: 25, outdoor: true },
   { id: "v23", name: "테르메 온천 리조트", category: "stay", sub: "온천 호텔", area: "이천 모가면", price: 110000, base: 4.6, seasons: ["winter"], emoji: "♨️", hue: 195, f: { room: true }, capacity: 40 },
-  { id: "v24", name: "강변 글램핑 파크", category: "stay", sub: "글램핑", area: "여주 강천면", price: 70000, base: 4.1, seasons: ["spring", "summer"], emoji: "⛺", hue: 80, f: { alcohol: true }, capacity: 30 },
+  { id: "v24", name: "강변 글램핑 파크", category: "stay", sub: "글램핑", area: "여주 강천면", price: 70000, base: 4.1, seasons: ["spring", "summer"], emoji: "⛺", hue: 80, f: { alcohol: true }, capacity: 30, outdoor: true },
   { id: "v25", name: "로스터리 창고", category: "cafe", sub: "대형 카페", area: "이천 마장면", price: 9000, base: 4.3, seasons: ALL, emoji: "☕", hue: 22, f: { veg: true }, capacity: 50 },
+  // fresh: 어느 부서도 아직 가 본 적 없는 곳 (경비 전표가 없음). "완전히 새로운 제안"에 쓰인다.
+  { id: "v27", name: "별마루 천문대 야간 관측", category: "activity", sub: "천문 관측", area: "여주 세종천문대 인근", price: 18000, base: 4, seasons: ["autumn", "winter"], emoji: "🔭", hue: 235, f: {}, capacity: 30, outdoor: true, fresh: true },
+  { id: "v28", name: "레트로 오락실과 LP 라운지", category: "activity", sub: "오락실·음악 감상", area: "이천 중리동", price: 16000, base: 4, seasons: ALL, emoji: "🕹️", hue: 300, f: {}, capacity: 26, fresh: true },
+  { id: "v29", name: "딸기·블루베리 농장 체험", category: "activity", sub: "수확 체험", area: "이천 장호원", price: 20000, base: 4, seasons: ["spring", "summer"], emoji: "🍓", hue: 350, f: { veg: true }, capacity: 40, outdoor: true, fresh: true },
+  { id: "v30", name: "꽃담 플라워 클래스", category: "culture", sub: "원데이 클래스", area: "이천 증포동", price: 33000, base: 4, seasons: ALL, emoji: "💐", hue: 330, f: {}, capacity: 16, fresh: true },
+  { id: "v31", name: "초록식탁 비건 다이닝", category: "restaurant", sub: "채식 코스", area: "이천 설봉공원 인근", price: 34000, base: 4, seasons: ALL, emoji: "🥗", hue: 110, f: { veg: true, room: true }, capacity: 28, fresh: true },
+  { id: "v32", name: "과녁 실내 양궁 카페", category: "activity", sub: "양궁", area: "이천 부발읍", price: 17000, base: 4, seasons: ALL, emoji: "🏹", hue: 5, f: {}, capacity: 20, fresh: true },
   { id: "v26", name: "벚꽃길 베이커리 카페", category: "cafe", sub: "베이커리 카페", area: "이천 설봉호수", price: 11000, base: 4.5, seasons: ["spring"], emoji: "🌸", hue: 335, f: { veg: true }, capacity: 35 },
 ];
 
@@ -111,7 +118,7 @@ export function buildSeed() {
         deptId: dept.id,
         email: `user${num}@demo-corp.example`,
         isPlanner: i === 0,
-        prefs: { diet, alcohol, likes, note },
+        prefs: { diet, alcohol, likes },
       });
     });
   }
@@ -137,7 +144,7 @@ export function buildSeed() {
       let venue;
       if (dept.id === MY_DEPT && myFixed[back]) venue = VENUES.find((v) => v.id === myFixed[back]);
       else {
-        const pool = VENUES.filter((v) => v.seasons.includes(season));
+        const pool = VENUES.filter((v) => v.seasons.includes(season) && !v.fresh);
         venue = pick(r, pool);
       }
       const members = byDept(dept.id);
@@ -222,11 +229,24 @@ export function buildSeed() {
       calendar.push({ empId: e.id, from: ymd(start), to: ymd(addDays(start, len - 1)), type: type[0] });
     }
   }
-  const milestones = [
-    { deptId: MY_DEPT, date: ymd(addDays(now, 13)), title: "평가 Lot 결과 보고" },
-    { deptId: MY_DEPT, date: ymd(addDays(now, 27)), title: "분기 과제 중간 리뷰" },
-    { deptId: MY_DEPT, date: ymd(addDays(now, 40)), title: "신규 공정 조건 확정 회의" },
-  ];
+  // 부서 과제 일정. important=true인 기간은 날짜 후보에서 자동으로 빠진다.
+  const MILESTONE_TITLES = ["평가 Lot 결과 보고", "분기 과제 중간 리뷰", "신규 공정 조건 확정 회의"];
+  const milestones = [];
+  DEPARTMENTS.forEach((dept, i) => {
+    [[12, 3, true], [26, 2, true], [40, 1, false]].forEach(([offset, len, important], k) => {
+      const start = addDays(now, offset + i * 2);
+      milestones.push({ deptId: dept.id, from: ymd(start), to: ymd(addDays(start, len - 1)), title: MILESTONE_TITLES[k], important });
+    });
+  });
+
+  // 사내 블로그·동아리 게시판에 올라온 단체 사진 (경비 전표와 별개로 수집되는 방문 흔적)
+  const CLUBS = ["볼링 동아리", "러닝 크루", "사진 동아리", "보드게임 동아리", "미식 동호회"];
+  const photoPosts = [];
+  for (const v of VENUES) {
+    if (v.fresh) continue;
+    const n = Math.floor(r() * 4);
+    for (let i = 0; i < n; i++) photoPosts.push({ venueId: v.id, source: r() < 0.5 ? "사내 블로그" : pick(r, CLUBS), photos: 2 + Math.floor(r() * 10) });
+  }
 
   return {
     meta: { seededAt: now },
@@ -239,6 +259,7 @@ export function buildSeed() {
     commentSeeds,
     calendar,
     milestones,
+    photoPosts,
     activities: [],
     crawledDocNos: [],
     plans: [],

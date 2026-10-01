@@ -177,7 +177,7 @@ function PlanFlow({ id }) {
         </div>
       )}
       {plan.status === "date_confirmed" && <VenuePicker plan={plan} onChange={setData} />}
-      {step >= 3 && <Confirmed plan={plan} />}
+      {step >= 3 && <Confirmed plan={plan} onChange={setData} />}
     </div>
   );
 }
@@ -195,6 +195,12 @@ function DatePicker({ plan, onChange }) {
   return (
     <section className="panel">
       <h2>날짜 후보 <span className="muted">부서원 캘린더와 과제 일정을 확인했습니다</span></h2>
+      {plan.excludedPeriods?.length > 0 && (
+        <div className="callout info">
+          중요한 과제 일정과 겹치는 기간은 후보에서 자동으로 뺐습니다:{" "}
+          {plan.excludedPeriods.map((x, i) => <span key={i}><b>{x.label}</b> {x.title}{i < plan.excludedPeriods.length - 1 ? ", " : ""}</span>)}
+        </div>
+      )}
       {!plan.dateCandidates.length && <p className="muted">해당 기간에 가능한 평일이 없습니다. 기간을 넓혀 주세요.</p>}
       <ul className="date-list">
         {plan.dateCandidates.map((c, i) => (
@@ -266,7 +272,7 @@ function VenuePicker({ plan, onChange }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
   if (!data) return <div className="center-note">경비 기록과 후기를 모으는 중…</div>;
-  const { recommendations: recs, advice, preferred } = data;
+  const { recommendations: recs, fresh, weather, advice, preferred } = data;
 
   const confirm = async (venueId) => {
     setBusy(true);
@@ -275,14 +281,15 @@ function VenuePicker({ plan, onChange }) {
 
   return (
     <section className="panel">
-      <h2>장소·활동 추천 <span className="muted">타부서 경비 기록, 후기, 방문 횟수, 개인 선호 기준</span></h2>
+      <h2>장소·활동 추천 <span className="muted">이맘때 우리 부서·타부서 경비 기록, 후기, 단체 사진, 날씨, 개인 선호 기준</span></h2>
+      <p className="weather-line">{dateLabel(plan.date)} 예보 <b>{weather.label}</b> · {weather.outdoorOk ? "야외 활동도 괜찮습니다" : "실내 위주로 추천합니다"}</p>
       <div className="advice">
         <span className="advice-who">에이전트{advice.engine === "claude" ? " · Claude" : ""}</span>
         <p>{advice.text}</p>
       </div>
       {preferred && preferred.visitsMine >= 2 && (
         <div className="callout warn">
-          처음에 고른 장소(<b>{preferred.name}</b>)는 우리 부서가 이미 {preferred.visitsMine}번 다녀왔습니다. 아래에서 “처음 가는 곳” 표시가 있는 대안을 확인해 보세요.
+          처음에 고른 장소(<b>{preferred.name}</b>)는 우리 부서가 이미 {preferred.visitsMine}번 다녀왔습니다. 아래에서 아래 “완전히 새로운 제안”도 확인해 보세요.
         </div>
       )}
       <ul className="rec-list">
@@ -301,17 +308,17 @@ function VenuePicker({ plan, onChange }) {
               <div className="notes">{v.reasons.map((r, k) => <span key={k} className={`note ${r.tone}`}>{r.text}</span>)}</div>
               {open === v.id && (
                 <div className="evidence">
-                  <h4>타부서 경비 처리 기록</h4>
+                  <h4>우리 부서·타부서 경비 처리 기록</h4>
                   {v.evidence.expenses.length ? (
                     <table><tbody>
                       {v.evidence.expenses.map((e) => (
-                        <tr key={e.docNo}><td>{e.deptName}</td><td>{dateLabel(e.date)}</td><td>{e.headcount}명</td><td className="num">{won(e.amount)}</td><td>{e.accountName}</td><td>{e.budgetSource}</td></tr>
+                        <tr key={e.docNo}><td>{e.deptName}{e.mine && <em className="tag">우리 부서</em>}</td><td>{dateLabel(e.date)}</td><td>{e.headcount}명</td><td className="num">{won(e.amount)}</td><td>{e.accountName}</td><td>{e.budgetSource}</td></tr>
                       ))}
                     </tbody></table>
-                  ) : <p className="muted small">타부서 기록이 없습니다.</p>}
+                  ) : <p className="muted small">경비 기록이 없습니다.</p>}
                   {v.evidence.reviews.map((r) => <p key={r.id} className="quote">“{r.comment}” <small>{r.deptName} · ★{r.rating}</small></p>)}
                   {v.evidence.tips.map((t, k) => <p key={k} className="quote tip">담당자 팁: {t.text} <small>{t.deptName}</small></p>)}
-                  {v.evidence.blogCount > 0 && <p className="muted small">사내 블로그 게시글 {v.evidence.blogCount}건에 단체 사진이 있습니다.</p>}
+                  {v.photoCount > 0 && <p className="muted small">단체 사진 게시글 {v.photoCount}건: {[...new Set(v.photoPosts.map((p) => p.source))].join(", ")}</p>}
                 </div>
               )}
               <div className="rec-actions">
@@ -322,16 +329,51 @@ function VenuePicker({ plan, onChange }) {
           </li>
         ))}
       </ul>
+
+      {fresh.length > 0 && (
+        <>
+          <h2 className="sub-h">완전히 새로운 제안 <span className="muted">아직 어느 부서도 가 보지 않은 곳 · 날씨와 취향 기준</span></h2>
+          <ul className="fresh-list">
+            {fresh.map((v) => (
+              <li key={v.id} className="fresh">
+                <div className="fresh-art" style={artStyle(v.hue)}>{v.emoji}</div>
+                <div className="card-kicker">{v.sub} · {v.area}</div>
+                <h3><Link to={`/venue/${v.id}`}>{v.name}</Link></h3>
+                <div className="notes">{v.reasons.slice(0, 4).map((r, k) => <span key={k} className={`note ${r.tone}`}>{r.text}</span>)}</div>
+                <button className="btn small outline" disabled={busy} onClick={() => confirm(v.id)}>이곳으로 확정</button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }
 
-function Confirmed({ plan }) {
+function ReviewAsk({ plan, onChange }) {
+  const answer = async (send) => onChange(await api.post(`/plans/${plan.id}/review-form`, { send }));
+  if (plan.reviewForm === "scheduled") return <div className="callout good">후기 폼을 작성해 두었습니다. 활동 기록이 올라오면 참석자 {plan.memberIds.length}명에게 자동으로 발송합니다.</div>;
+  if (plan.reviewForm === "sent") return <div className="callout good">참석자 {plan.memberIds.length}명에게 후기 폼을 발송했습니다.</div>;
+  if (plan.reviewForm === "skip") return <div className="callout info">후기 폼은 보내지 않기로 했습니다. <button className="link" onClick={() => answer(true)}>보내기로 변경</button></div>;
+  return (
+    <div className="callout ask">
+      <b>활동이 끝나면 참석자에게 후기를 묻는 네이버 폼을 작성해 발송할까요?</b>
+      <span className="muted small">만족도와 한마디를 묻는 폼입니다. 응답은 다음 추천에 반영됩니다.</span>
+      <div className="ask-actions">
+        <button className="btn small" onClick={() => answer(true)}>네, 작성해서 발송</button>
+        <button className="btn small outline" onClick={() => answer(false)}>아니요</button>
+      </div>
+    </div>
+  );
+}
+
+function Confirmed({ plan, onChange }) {
   const done = plan.status === "done";
   return (
     <section className="panel confirmed">
       <h2>{done ? "활동이 기록되었습니다" : "확정되었습니다"}</h2>
       <p>{dateLabel(plan.date)} {SLOTS[plan.slot]} · {plan.venue.name} ({plan.venue.area}) · 부서원 {plan.memberIds.length}명에게 안내 메일을 보냈습니다.</p>
+      <ReviewAsk plan={plan} onChange={onChange} />
       <div className="next-actions">
         <a className="next" href={plan.venue.bookingUrl} target="_blank" rel="noreferrer">
           <b>1. 예약하기 ↗</b><span>네이버 지도에서 예약·검색 페이지를 엽니다</span>
@@ -343,9 +385,9 @@ function Confirmed({ plan }) {
           <b>3. 활동 후 ERP에 경비 등록 ↗</b><span>{done ? "전표가 이미 감지되었습니다" : "등록하면 에이전트가 10초 안에 감지해 기록으로 올립니다"}</span>
         </a>
         {done ? (
-          <Link className="next hot" to={`/history/${plan.activityId}`}><b>4. 기록 보고 코멘트 남기기</b><span>참석자에게는 후기 폼이 발송되었습니다</span></Link>
+          <Link className="next hot" to={`/history/${plan.activityId}`}><b>4. 기록 보고 코멘트 남기기</b><span>{plan.reviewForm === "sent" ? "참석자에게는 후기 폼이 발송되었습니다" : "담당자 메일로 알림이 갔습니다"}</span></Link>
         ) : (
-          <div className="next disabled"><b>4. 기록·후기 수집</b><span>ERP 전표가 올라오면 자동으로 진행됩니다</span></div>
+          <div className="next disabled"><b>4. 기록·후기 수집</b><span>ERP 전표가 올라오면 자동으로 기록됩니다</span></div>
         )}
       </div>
     </section>

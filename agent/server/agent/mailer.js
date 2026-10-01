@@ -9,7 +9,7 @@ export function sendMail(db, { to, subject, body, type, link, linkLabel }) {
     to,
     toName: emp.name,
     toEmail: emp.email,
-    from: "조직문화 에이전트",
+    from: "HBM 에이전트",
     subject,
     body,
     type,

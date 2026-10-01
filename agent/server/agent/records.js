@@ -39,11 +39,30 @@ function ensureVenue(db, expense) {
   return venue;
 }
 
+/** 참석자에게 후기 폼(네이버 폼 대체) 링크를 메일로 보낸다 */
+export function sendReviewForm(db, activity) {
+  if (activity.reviewFormSent) return;
+  const venue = db.venues.find((v) => v.id === activity.venueId);
+  for (const id of activity.participantIds) {
+    sendMail(db, {
+      to: id,
+      type: "review",
+      subject: `[후기 요청] ${dateLabel(activity.date)} ${venue.name} 어떠셨나요?`,
+      body: `참석해 주셔서 감사합니다. 1분이면 끝나는 만족도 조사입니다.
+응답은 다음 활동 장소 추천에 반영됩니다.`,
+      link: `/review/${activity.id}?as=${id}`,
+      linkLabel: "후기 폼 열기",
+    });
+  }
+  activity.reviewFormSent = true;
+  log("메일", `참석자 ${activity.participantIds.length}명에게 후기 폼 발송`);
+}
+
 export function registerActivity(db, expense, { silent }) {
   const dept = db.departments.find((d) => d.name === expense.dept);
   const venue = ensureVenue(db, expense);
   const members = db.employees.filter((e) => e.deptId === dept?.id);
-  const planner = members.find((e) => e.isPlanner);
+  const planners = members.filter((e) => e.isPlanner);
 
   const activity = {
     id: uid("a"),
@@ -71,6 +90,7 @@ export function registerActivity(db, expense, { silent }) {
       ? [{ id: uid("c"), author: expense.drafter, text: db.commentSeeds[expense.docNo], createdAt: expense.draftDate }]
       : [],
     blog: db.blogPosts[expense.docNo] || null,
+    reviewFormSent: silent,
     createdAt: new Date().toISOString(),
   };
 
@@ -89,27 +109,25 @@ export function registerActivity(db, expense, { silent }) {
     }
     log("기록", `${expense.dept} 전표 ${expense.docNo} → "${venue.name}" 활동 기록 자동 등록${plan ? " (기획과 연결)" : ""}`);
 
-    if (planner) {
+    const willSend = plan?.reviewForm === "scheduled";
+    for (const planner of planners) {
       sendMail(db, {
         to: planner.id,
         type: "record",
         subject: `[기록 업데이트] ${dateLabel(expense.useDate)} ${venue.name} 활동이 부서 기록에 올라갔습니다`,
-        body: `ERP에 등록하신 전표(${expense.docNo}, ${won(expense.amount)}, ${expense.accountName})를 읽어 부서 조직문화활동 기록으로 올렸습니다.\n\n이번 활동이 어땠는지, 다음 담당자가 알아 두면 좋을 점을 코멘트로 남겨 주세요.`,
+        body: `ERP에 등록된 전표(${expense.docNo}, ${won(expense.amount)}, ${expense.accountName})를 읽어 부서 조직문화활동 기록으로 올렸습니다.
+
+이번 활동이 어땠는지, 다음 담당자가 알아 두면 좋을 점을 코멘트로 남겨 주세요.
+${willSend ? "미리 요청하신 대로 참석자에게 후기 폼을 발송했습니다." : "후기 폼은 아직 보내지 않았습니다. 기록 화면에서 발송할 수 있습니다."}`,
         link: `/history/${activity.id}`,
         linkLabel: "기록 보고 코멘트 남기기",
       });
     }
-    for (const id of activity.participantIds) {
-      sendMail(db, {
-        to: id,
-        type: "review",
-        subject: `[후기 요청] ${dateLabel(expense.useDate)} ${venue.name} 어떠셨나요?`,
-        body: `참석해 주셔서 감사합니다. 1분이면 끝나는 만족도 조사입니다.\n응답은 다음 활동 장소 추천에 반영됩니다.`,
-        link: `/review/${activity.id}?as=${id}`,
-        linkLabel: "후기 폼 열기",
-      });
+    log("메일", `담당자 ${planners.length}명에게 기록 업데이트 알림 발송`);
+    if (willSend) {
+      sendReviewForm(db, activity);
+      plan.reviewForm = "sent";
     }
-    log("메일", `담당자에게 기록 업데이트 알림 1건, 참석자 ${activity.participantIds.length}명에게 후기 폼 발송`);
   }
 
   db.activities.push(activity);

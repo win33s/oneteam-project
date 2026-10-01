@@ -35,6 +35,25 @@ export default function VenuePage() {
         <div className="stat"><span>우리 부서 방문</span><b>{v.visitsMine}회</b><small>{v.lastVisitedMine ? `최근 ${dateLabel(v.lastVisitedMine)}` : "아직 없음"}</small></div>
       </div>
 
+      {v.brandNew && <div className="callout good">아직 어느 부서도 가 보지 않은 곳입니다. 경비 기록과 후기가 없어 날씨와 부서원 취향을 근거로 추천합니다.</div>}
+
+      <div className="two-col">
+        <section className="panel">
+          <h2>부서별 방문 횟수</h2>
+          <ul className="count-list">
+            {v.deptVisits.map((d) => <li key={d.deptName}><span>{d.deptName}</span><b className={d.count >= 3 ? "hot" : ""}>{d.count}회</b></li>)}
+            {!v.deptVisits.length && <li className="muted">방문한 부서가 없습니다.</li>}
+          </ul>
+        </section>
+        <section className="panel">
+          <h2>단체 사진 <span className="muted">사내 블로그·동아리 게시판</span></h2>
+          <ul className="count-list">
+            {v.photoPosts.map((p, i) => <li key={i}><span>{p.source}{p.title ? ` · ${p.title}` : ""}</span><b>사진 {p.photos}장</b></li>)}
+            {!v.photoPosts.length && <li className="muted">올라온 사진이 없습니다.</li>}
+          </ul>
+        </section>
+      </div>
+
       <section className="panel">
         <h2>경비 처리 기록</h2>
         <p className="muted">ERP에서 수집한 전표입니다. 어느 예산으로 얼마를 썼는지 참고하세요.</p>
@@ -74,14 +93,11 @@ export default function VenuePage() {
           </ul>
         </section>
         <section className="panel">
-          <h2>담당자 팁과 사내 블로그</h2>
+          <h2>담당자 팁</h2>
           <ul className="reviews">
             {v.visits.flatMap((a) => a.comments.map((c) => (
               <li key={c.id}><div className="muted small">{a.deptName} 담당자</div><p>{c.text}</p></li>
             )))}
-            {v.visits.filter((a) => a.blog).map((a) => (
-              <li key={a.id + "b"}><div className="muted small">사내 블로그 · 단체 사진 {a.blog.photos}장</div><p>{a.blog.title}</p></li>
-            ))}
           </ul>
         </section>
       </div>
