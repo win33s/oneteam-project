@@ -47,10 +47,8 @@ const layout = (title, body) => `<!doctype html>
 
 erpRouter.get("/", (_req, res) => res.redirect("/erp/expenses"));
 
-erpRouter.get("/expenses", (req, res) => {
-  const db = getDb();
-  const dept = req.query.dept || "";
-  const page = Math.max(1, Number(req.query.page) || 1);
+export function listPageHtml(db, { dept = "", page = 1 } = {}) {
+  page = Math.max(1, Number(page) || 1);
   const all = db.erpExpenses.filter((e) => !dept || e.dept === dept);
   const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
   const rows = all.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -80,12 +78,12 @@ erpRouter.get("/expenses", (req, res) => {
   <div class="pager">${Array.from({ length: pages }, (_, i) =>
     i + 1 === page ? `<strong>${i + 1}</strong>` : `<a href="?page=${i + 1}${q}">${i + 1}</a>`
   ).join("")}</div>`;
-  res.send(layout("경비 전표 조회", body));
-});
+  return layout("경비 전표 조회", body);
+}
 
-erpRouter.get("/expenses/:docNo", (req, res) => {
-  const e = getDb().erpExpenses.find((x) => x.docNo === req.params.docNo);
-  if (!e) return res.status(404).send(layout("없음", "<h1>전표를 찾을 수 없습니다</h1>"));
+export function detailPageHtml(db, docNo) {
+  const e = db.erpExpenses.find((x) => x.docNo === docNo);
+  if (!e) return null;
   const row = (label, field, value) => `<tr><th>${label}</th><td data-field="${field}">${esc(value)}</td></tr>`;
   const body = `
   <h1>경비 전표 상세</h1>
@@ -109,7 +107,23 @@ erpRouter.get("/expenses/:docNo", (req, res) => {
     ${row("상태", "status", e.status)}
   </table>
   <div class="actions"><a class="btn" href="/erp/expenses">목록</a></div>`;
-  res.send(layout(e.title, body));
+  return layout(e.title, body);
+}
+
+/** 크롤러용: ERP 경로를 받아 그 화면의 HTML을 돌려준다 (HTTP를 거치지 않는 서버리스 환경에서 사용) */
+export function renderErpPage(db, pathAndQuery) {
+  const url = new URL(pathAndQuery, "http://erp.local");
+  const m = url.pathname.match(/^\/erp\/expenses\/(.+)$/);
+  if (m) return detailPageHtml(db, decodeURIComponent(m[1]));
+  if (url.pathname === "/erp/expenses") return listPageHtml(db, { dept: url.searchParams.get("dept") || "", page: url.searchParams.get("page") });
+  return null;
+}
+
+erpRouter.get("/expenses", (req, res) => res.send(listPageHtml(getDb(), { dept: req.query.dept || "", page: req.query.page })));
+
+erpRouter.get("/expenses/:docNo", (req, res) => {
+  const html = detailPageHtml(getDb(), req.params.docNo);
+  return html ? res.send(html) : res.status(404).send(layout("없음", "<h1>전표를 찾을 수 없습니다</h1>"));
 });
 
 erpRouter.get("/new", (req, res) => {

@@ -25,6 +25,21 @@ npm start
 
 환경변수 `ANTHROPIC_API_KEY`를 설정하고 서버를 시작하면, 첫 화면의 문장 해석과 추천 조언을 Claude가 작성합니다. 없으면 규칙 기반으로 동작합니다.
 
+## Vercel 배포
+
+Vercel에서는 서버가 요청 때만 잠깐 실행되므로, 데이터를 파일 대신 Upstash Redis에 저장합니다.
+
+1. Vercel 프로젝트 → Settings → Build and Deployment → **Root Directory**를 `agent`로 설정합니다.
+2. Vercel 프로젝트 → **Storage → Create Database → Upstash (Redis)** 를 만들어 프로젝트에 연결합니다. 접속 정보(`KV_REST_API_URL`, `KV_REST_API_TOKEN` 또는 `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`)가 환경변수로 자동 등록됩니다.
+3. 다시 배포합니다 (Deployments → 최근 배포 → Redeploy, 또는 새로 푸시).
+
+빌드 명령과 경로 설정은 `vercel.json`에 들어 있어 따로 입력할 필요가 없습니다.
+
+- Redis 환경변수가 없으면 메모리에만 저장해서 동작은 하지만 데이터가 수시로 초기화됩니다.
+- Vercel에는 계속 도는 타이머가 없어서, 새 ERP 전표는 화면이 상태를 물어볼 때(몇 초 간격) 확인합니다.
+- 데이터를 처음 상태로 되돌리려면 Upstash 콘솔에서 `hbm:db` 키를 지웁니다. 다음 접속 때 새로 만들어집니다.
+- 로컬 `npm start`는 지금처럼 `data/db.json` 파일을 씁니다.
+
 ## 데모 순서
 
 0. **로그인**: 사번(숫자 4~10자리), 이름, 비밀번호(4자 이상)를 넣고, 다음 화면에서 그룹과 팀을 고릅니다. 데모라서 형식만 확인하고 비밀번호는 저장하지 않습니다. 실제 사내 비밀번호는 넣지 마세요. 왼쪽 아래 "로그아웃"으로 처음 화면에 돌아갑니다.

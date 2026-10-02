@@ -5,11 +5,11 @@ import { uid, today, ymd, addDays, dateLabel, won } from "./util.js";
 import { recommendDates } from "./agent/scheduler.js";
 import { homeRows, venueDetail, recommendVenues, allVenueCards, bookingUrl, CATEGORY_LABEL } from "./agent/recommender.js";
 import { sendMail } from "./agent/mailer.js";
-import { crawlErp } from "./agent/crawler.js";
 import { sendReviewForm } from "./agent/records.js";
 import { llmEnabled, parseRequestWithLlm, summarizeRecommendations } from "./agent/llm.js";
 
-export function apiRouter(baseUrl) {
+/** @param {{crawl: () => Promise<object>, syncOnPoll: boolean}} opts syncOnPoll=true면 주기 타이머 대신 화면의 상태 조회 때 ERP를 확인한다 */
+export function apiRouter({ crawl, syncOnPoll }) {
   const api = express.Router();
   api.use(express.json());
   const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
@@ -86,7 +86,7 @@ export function apiRouter(baseUrl) {
   }));
 
   api.post("/agent/sync-erp", wrap(async (_req, res) => {
-    const result = await crawlErp({ baseUrl });
+    const result = await crawl();
     res.json({ created: (result.created || []).map((a) => a.id), scanned: result.scanned || 0 });
   }));
 
@@ -141,11 +141,12 @@ export function apiRouter(baseUrl) {
     res.json(expandPlan(db, plan));
   });
 
-  api.get("/plans/:id", (req, res) => {
+  api.get("/plans/:id", wrap(async (req, res) => {
+    if (syncOnPoll) await crawl();
     const db = getDb();
     const plan = db.plans.find((p) => p.id === req.params.id);
     return plan ? res.json(expandPlan(db, plan)) : notFound(res, "기획");
-  });
+  }));
 
   api.post("/plans/:id/poll", (req, res) => {
     const db = getDb();
@@ -378,11 +379,12 @@ export function apiRouter(baseUrl) {
     res.json({ ok: true });
   });
   api.get("/logs", (_req, res) => res.json(getDb().logs.slice(-60).reverse()));
-  api.get("/status", (req, res) => {
+  api.get("/status", wrap(async (req, res) => {
+    if (syncOnPoll) await crawl();
     const db = getDb();
     const me = who(req);
     res.json({ unread: db.mails.filter((m) => m.to === me.id && !m.read).length, activityCount: db.activities.length });
-  });
+  }));
 
   api.put("/employees/:id/prefs", (req, res) => {
     const db = getDb();
